@@ -39,6 +39,7 @@ beta~dgamma(10/4, 1/4)
 }
 "
 
+
 nGames<-length(unique(data$Game))
 numPlayers<-aggregate(data$Score~data$Game, FUN=length)[,2]
 
@@ -50,6 +51,7 @@ totalPoints<-aggregate(data$ScoreTransformed~data$Game, FUN = sum)[,2]
 #players.num<-as.numeric(players)
 #factions.num<-as.numeric(factions)
 
+#There's probably a more efficient way to do this, but I don't know enough about JAGs data structures, and this works reasonably well
 game<-matrix(1, nrow=nGames, ncol=max(numPlayers))
 player.mat<-matrix(1, nrow=nGames, ncol=max(numPlayers))
 faction.mat<-matrix(1, nrow=nGames, ncol=max(numPlayers))
@@ -65,14 +67,14 @@ data.jags=c("nGames", "numPlayers", "game", "faction.mat", "player.mat", "nFacti
 
 writeLines(mdl, 'gameRank.jags')
 jags.rank<-jags(data=data.jags, parameters.to.save = parms, inits=NULL, model.file = 'gameRank.jags',
-                n.burnin = 5000, n.iter=55000, n.chains=2, n.thin = 1)
+                n.burnin = 5000, n.iter=55000, n.chains=2, n.thin = 2)
 jags.rank
 mcmc<-as.mcmc(jags.rank)
 chains<-as.matrix(mcmc)
 
 score<-apply(chains, 2, mean)
-lowerQuantile<-apply(chains,2,quantile,.025)
-upperQuantile<-apply(chains,2,quantile,.975)
+lowerQuantile<-apply(chains,2,quantile,.25)
+upperQuantile<-apply(chains,2,quantile,.75)
 
 fac.indices<-which(substr(names(score), 1,1)=="f")
 fac.order<-sapply(regmatches(names(score)[fac.indices], gregexpr("[[:digit:]]+", names(score)[fac.indices])),as.numeric)
@@ -84,10 +86,11 @@ Faction.Rank<-data.frame(Faction = factions[fac.order], Strength= score[fac.indi
                          upperBound=upperQuantile[fac.indices])
 Player.Rank<-data.frame(Player = players, Strength = score[player.indices], LowerBound=lowerQuantile[player.indices],
                         UpperBound=upperQuantile[player.indices])
-Faction.Rank<-Faction.Rank[order(-Faction.Rank$Strength),]
-Player.Rank<-Player.Rank[order(-Player.Rank$Strength),]
+Faction.Rank<-Faction.Rank[order(-Faction.Rank$LowerBound),]
+Player.Rank<-Player.Rank[order(-Player.Rank$LowerBound),]
 Faction.Rank
 Player.Rank
 
 lambda<-chains[,which(colnames(chains)=="lambda")]
 hist(lambda)
+mean(lambda)
